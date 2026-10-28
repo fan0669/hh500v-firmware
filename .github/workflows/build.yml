@@ -9,6 +9,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: ccache
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ github.run_id }}
+          restore-keys: ccache-
+
       - name: Free disk
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
@@ -90,17 +97,30 @@ jobs:
           cat feeds.conf.default
           ./scripts/feeds update -a || { echo "retry update"; sleep 10; ./scripts/feeds update -a; } || true
           ./scripts/feeds install -a || true
+          echo "=== feed Makefile count ==="
+          find feeds -name Makefile | wc -l
 
       - name: Configure
         run: |
           cd openwrt
           cp ../configs/hh500v-24.10.config .config
+          echo "CONFIG_CCACHE=y" >> .config
           make defconfig || { echo "!! defconfig failed"; exit 1; }
           echo "=== device ==="
           grep -E "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_tcl_linkhub-hh500v" .config || \
             { echo "!! device not selected"; exit 1; }
-          echo "=== MHI in kernel config ==="
-          grep -E "CONFIG_MHI" .config || echo "(未生效，将导致 5G 不可用)"
+          echo "=== required packages ==="
+          miss=0
+          for p in luci-app-openclash luci-app-passwall qmodem luci-app-modemband \
+                   luci-app-UUGameAcc mihomo nikki daed tailscale zerotier; do
+            if grep -q "^CONFIG_PACKAGE_$p=y" .config; then
+              echo "OK   $p"
+            else
+              echo "MISS $p"; miss=$((miss+1))
+            fi
+          done
+          echo "missing=$miss (allow <=3)"
+          [ "$miss" -le 3 ] || { echo "!! too many missing"; exit 1; }
 
       - name: Download
         run: |
