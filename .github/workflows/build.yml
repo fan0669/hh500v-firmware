@@ -28,11 +28,9 @@ jobs:
       - name: Clone 24.10.6
         run: |
           set -e
-          mkdir -p openwrt
-          git -C openwrt init -q
-          git -C openwrt remote add origin $REPO
-          git -C openwrt fetch --depth 1 origin cf234f8de6d5
-          git -C openwrt checkout -q FETCH_HEAD
+          git clone --filter=blob:none --no-checkout https://github.com/immortalwrt/immortalwrt openwrt || \
+            git clone --no-checkout https://github.com/immortalwrt/immortalwrt openwrt
+          git -C openwrt checkout cf234f8de6d5
           git -C openwrt log -1 --oneline
 
       - name: Backport HH500V device
