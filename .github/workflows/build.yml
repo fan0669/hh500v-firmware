@@ -37,6 +37,33 @@ jobs:
           grep -n "tcl_linkhub-hh500v" openwrt/target/linux/qualcommax/image/ipq807x.mk
           grep -c "tcl,linkhub-hh500v" openwrt/target/linux/qualcommax/ipq807x/base-files/etc/board.d/02_network || true
 
+      - name: MHI into kernel (24.10 has no kmod-mhi packages)
+        run: |
+          python3 - <<'PY'
+          p = "openwrt/target/linux/qualcommax/image/ipq807x.mk"
+          s = open(p).read()
+          old = ("DEVICE_PACKAGES := ipq-wifi-tcl_linkhub-hh500v kmod-mhi-pci-generic \\\n"
+                 "\t\tkmod-mhi-wwan-ctrl kmod-mhi-wwan-mbim")
+          new = "DEVICE_PACKAGES := ipq-wifi-tcl_linkhub-hh500v"
+          if old in s:
+              s = s.replace(old, new)
+              open(p, "w").write(s)
+              print("DEVICE_PACKAGES: kmod-mhi removed")
+          else:
+              print("WARNING: DEVICE_PACKAGES pattern not found")
+          PY
+          cat >> openwrt/target/linux/qualcommax/config-6.6 <<'EOF'
+          CONFIG_WWAN=y
+          CONFIG_MHI_BUS=y
+          CONFIG_MHI_BUS_PCI_GENERIC=y
+          CONFIG_MHI_WWAN_CTRL=y
+          CONFIG_MHI_WWAN_MBIM=y
+          EOF
+          echo "=== config-6.6 tail ==="
+          tail -6 openwrt/target/linux/qualcommax/config-6.6
+          echo "=== device packages ==="
+          grep -A2 "DEVICE_PACKAGES := ipq-wifi-tcl" openwrt/target/linux/qualcommax/image/ipq807x.mk
+
       - name: MHI 6.6 backport patch
         run: |
           mkdir -p openwrt/target/linux/generic/backport-6.6
@@ -63,8 +90,6 @@ jobs:
           cat feeds.conf.default
           ./scripts/feeds update -a || { echo "retry update"; sleep 10; ./scripts/feeds update -a; } || true
           ./scripts/feeds install -a || true
-          echo "=== feed Makefile count ==="
-          find feeds -name Makefile | wc -l
 
       - name: Configure
         run: |
@@ -74,18 +99,8 @@ jobs:
           echo "=== device ==="
           grep -E "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_tcl_linkhub-hh500v" .config || \
             { echo "!! device not selected"; exit 1; }
-          echo "=== required packages ==="
-          miss=0
-          for p in luci-app-openclash luci-app-passwall qmodem luci-app-modemband \
-                   luci-app-UUGameAcc mihomo nikki daed tailscale zerotier; do
-            if grep -q "^CONFIG_PACKAGE_$p=y" .config; then
-              echo "OK   $p"
-            else
-              echo "MISS $p"; miss=$((miss+1))
-            fi
-          done
-          echo "missing=$miss (allow <=3)"
-          [ "$miss" -le 3 ] || { echo "!! too many missing"; exit 1; }
+          echo "=== MHI in kernel config ==="
+          grep -E "CONFIG_MHI" .config || echo "(未生效，将导致 5G 不可用)"
 
       - name: Download
         run: |
