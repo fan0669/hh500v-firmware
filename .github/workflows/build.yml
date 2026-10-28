@@ -1,9 +1,6 @@
-name: Build HH500V ImmortalWrt
+name: Build HH500V ImmortalWrt (24.10.6, ported)
 on:
   workflow_dispatch:
-
-env:
-  REPO: https://github.com/immortalwrt/immortalwrt
 
 jobs:
   build:
@@ -33,25 +30,12 @@ jobs:
           git -C openwrt checkout cf234f8de6d5
           git -C openwrt log -1 --oneline
 
-      - name: Backport HH500V device
+      - name: Port HH500V to 24.10
         run: |
           set -e
-          cd openwrt
-          git config user.email ci@local
-          git config user.name ci
-          for sha in ac8b5526bc 12fd85eb79 30378ffea4; do
-            echo "== backport $sha"
-            curl -sSL "https://github.com/openwrt/openwrt/commit/$sha.patch" -o "/tmp/$sha.patch"
-            head -3 "/tmp/$sha.patch" || true
-            if ! git am -3 "/tmp/$sha.patch"; then
-              echo "!! git am failed, fallback to git apply -3"
-              git am --abort 2>/dev/null || true
-              git apply -3 "/tmp/$sha.patch"
-              git add -A
-              git commit -m "backport $sha" || true
-            fi
-          done
-          grep -n "tcl_linkhub-hh500v" target/linux/qualcommax/image/ipq807x.mk
+          python3 port/apply-port.py openwrt
+          grep -n "tcl_linkhub-hh500v" openwrt/target/linux/qualcommax/image/ipq807x.mk
+          grep -c "tcl,linkhub-hh500v" openwrt/target/linux/qualcommax/ipq807x/base-files/etc/board.d/02_network || true
 
       - name: MHI 6.6 backport patch
         run: |
@@ -89,6 +73,8 @@ jobs:
           cp ../configs/hh500v-24.10.config .config
           make defconfig
           grep -E "CONFIG_TARGET_qualcommax" .config | head -5
+          grep -E "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_tcl_linkhub-hh500v" .config || \
+            { echo "!! 设备没被选中，检查移植"; exit 1; }
 
       - name: Download
         run: |
@@ -108,6 +94,6 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: hh500v-24.10.6-full
+          name: hh500v-2410-port
           path: out/
           if-no-files-found: error
