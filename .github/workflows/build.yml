@@ -61,31 +61,31 @@ jobs:
             echo "src-git small https://github.com/kenzok8/small-package.git;main"
           } > feeds.conf.default
           cat feeds.conf.default
-          echo "=== update ==="
           ./scripts/feeds update -a || { echo "retry update"; sleep 10; ./scripts/feeds update -a; } || true
-          echo "=== install ==="
           ./scripts/feeds install -a || true
-          echo "=== 校验关键包 ==="
-          n=0
-          for p in luci-app-openclash luci-app-passwall qmodem luci-app-modemband luci-app-UUGameAcc; do
-            if ./scripts/feeds list 2>/dev/null | grep -q " $p "; then
-              echo "OK   $p"
-            else
-              echo "MISS $p"; n=$((n+1))
-            fi
-          done
-          echo "missing=$n"
-          [ "$n" -le 2 ] || { echo "!! 缺太多包，feed 没拉全"; exit 1; }
+          echo "=== feed Makefile count ==="
+          find feeds -name Makefile | wc -l
 
       - name: Configure
         run: |
-          set -e
           cd openwrt
           cp ../configs/hh500v-24.10.config .config
-          make defconfig
-          grep -E "CONFIG_TARGET_qualcommax" .config | head -5
+          make defconfig || { echo "!! defconfig failed"; exit 1; }
+          echo "=== device ==="
           grep -E "CONFIG_TARGET_qualcommax_ipq807x_DEVICE_tcl_linkhub-hh500v" .config || \
-            { echo "!! 设备没被选中"; exit 1; }
+            { echo "!! device not selected"; exit 1; }
+          echo "=== required packages ==="
+          miss=0
+          for p in luci-app-openclash luci-app-passwall qmodem luci-app-modemband \
+                   luci-app-UUGameAcc mihomo nikki daed tailscale zerotier; do
+            if grep -q "^CONFIG_PACKAGE_$p=y" .config; then
+              echo "OK   $p"
+            else
+              echo "MISS $p"; miss=$((miss+1))
+            fi
+          done
+          echo "missing=$miss (allow <=3)"
+          [ "$miss" -le 3 ] || { echo "!! too many missing"; exit 1; }
 
       - name: Download
         run: |
