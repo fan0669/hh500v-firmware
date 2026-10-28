@@ -40,13 +40,18 @@ jobs:
           git config user.email ci@local
           git config user.name ci
           for sha in ac8b5526bc 12fd85eb79 30378ffea4; do
-            echo "== $sha"
-            git fetch --depth 50 https://github.com/openwrt/openwrt.git $sha || \
-              git fetch https://github.com/openwrt/openwrt.git $sha
-            git cherry-pick -3 --no-commit FETCH_HEAD
-            git commit -m "backport $sha" || true
+            echo "== backport $sha"
+            curl -sSL "https://github.com/openwrt/openwrt/commit/$sha.patch" -o "/tmp/$sha.patch"
+            head -3 "/tmp/$sha.patch" || true
+            if ! git am -3 "/tmp/$sha.patch"; then
+              echo "!! git am failed, fallback to git apply -3"
+              git am --abort 2>/dev/null || true
+              git apply -3 "/tmp/$sha.patch"
+              git add -A
+              git commit -m "backport $sha" || true
+            fi
           done
-          grep -n tcl_linkhub-hh500v target/linux/qualcommax/image/ipq807x.mk
+          grep -n "tcl_linkhub-hh500v" target/linux/qualcommax/image/ipq807x.mk
 
       - name: MHI 6.6 backport patch
         run: |
