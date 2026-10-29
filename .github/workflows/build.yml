@@ -44,6 +44,16 @@ jobs:
           grep -n "tcl_linkhub-hh500v" openwrt/target/linux/qualcommax/image/ipq807x.mk
           grep -c "tcl,linkhub-hh500v" openwrt/target/linux/qualcommax/ipq807x/base-files/etc/board.d/02_network || true
 
+      - name: Force old-binding DTS (6.6 compatible)
+        run: |
+          U=https://raw.githubusercontent.com/openwrt/openwrt/ac8b5526bc/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8072-linkhub-hh500v.dts
+          D=openwrt/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq8072-linkhub-hh500v.dts
+          curl -sSL "$U" -o "$D"
+          echo "=== old binding markers (expect >0) ==="
+          grep -c "dp6_syn\|qcom,port_phyinfo" "$D" || true
+          echo "=== new binding markers (expect 0) ==="
+          grep -c "uniphy0" "$D" || echo 0
+
       - name: MHI into kernel (24.10 has no kmod-mhi packages)
         run: |
           python3 - <<'PY'
